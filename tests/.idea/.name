@@ -1,1 +1,1 @@
-docker-$$IMAGE_NAME$$-tests
+docker-swarm-local-network-connector-tests
