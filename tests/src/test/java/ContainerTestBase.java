@@ -1,81 +1,97 @@
 import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.command.CreateNetworkCmd;
 import com.github.dockerjava.api.command.CreateNetworkResponse;
+import com.github.dockerjava.api.command.InspectContainerResponse;
+import com.github.dockerjava.api.model.ContainerNetwork;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.Network;
+
+import java.util.concurrent.TimeoutException;
+
+import static org.junit.Assert.fail;
 
 public abstract class ContainerTestBase {
-    private static final Logger logger = LoggerFactory.getLogger(ContainerTestBase.class);
+    private static final String networkName = "target-network";
+
+    private static String _networkId;
+    private static DockerClient _client;
 
     @BeforeClass
     public static void setUp() {
-        String dockerImageTag = System.getProperty("image_tag", "homecentr/swarm-local-network-connector");
+        _client =  DockerClientFactory.lazyClient();
 
-
-        /*
-        Test scenario (existing containers)
-        - Create network
-        - Start a target container with a label
-        - Start the connector container
-        - Verify the target container has been connected
-
-        Test scenario (newly created container)
-        - Start the connector container
-        - Start a target container with a label
-        - Verify the target container has been connected (wait time 3 seconds tops)
-
-        Test scenario (invalid label)
-        - Start the connector container
-        - Start a target container with an invalid label
-        - Target container should not be in any new network
-
-        Test scenario (explicit IP/other config property...)
-
-
-        How to find out which networks the container has been connected to:
-        _container.getContainerInfo().getNetworkSettings().getNetworks()
-        */
-
-        // TODO: Create network (can be any bridge with a known IP CIDR)
-
-        DockerClient client = DockerClientFactory.lazyClient();
-        CreateNetworkCmd cmd = client.createNetworkCmd()
-            .withName("")
-            .withOptions();
-        CreateNetworkResponse response = cmd.exec();
-
-        client.removeNetworkCmd("");
-
-        logger.info("Tested Docker image tag: {}", dockerImageTag);
-
-        /*
-        _container = new GenericContainer<>(dockerImageTag)
-                //.withLabel()
-                .waitingFor(Wait.forHealthcheck());
-
-        _container.start();
-        _container.followOutput(new Slf4jLogConsumer(logger));
-         */
+        _networkId = createNetwork(networkName, "192.168.99.0/24");
     }
 
     @AfterClass
     public static void cleanUp() {
-        /*
-        _container.stop();
-        _container.close();
-         */
+        deleteNetwork(_networkId);
     }
 
     protected String getConnectorImageTag() {
-        return System.getProperty("image_tag", "homecentr/swarm-local-network-connector");
+        return "homecentr/swarm-local-network-connector:local";
+                // System.getProperty("image_tag", "homecentr/swarm-local-network-connector:local");
     }
 
-    protected boolean isConnectedToNetwork(GenericContainer container, Network network) {
+    protected void waitUntilContainerConnectedToNetwork(GenericContainer container, Integer timeout) throws InterruptedException, TimeoutException {
+        long startTime = System.currentTimeMillis();
 
+        while (!isConnectedToNetwork(container)) {
+            long remaining = System.currentTimeMillis() - startTime - timeout;
+
+            if (remaining < 0) {
+                throw new TimeoutException("The container did not get connected to the network within the timeout.");
+            }
+
+            Thread.sleep(500);
+        }
+    }
+
+    protected String getContainerIpAddress(GenericContainer container) throws Exception {
+        InspectContainerResponse response = _client.inspectContainerCmd(container.getContainerId()).exec();
+
+        for (ContainerNetwork network : response.getNetworkSettings().getNetworks().values()) {
+            if(_networkId.equals(network.getNetworkID())) {
+                return network.getIpAddress();
+            }
+        }
+
+        throw new Exception("The container is not connected to the network " + _networkId);
+    }
+
+    private boolean isConnectedToNetwork(GenericContainer container) {
+        InspectContainerResponse response = _client.inspectContainerCmd(container.getContainerId()).exec();
+
+        for (ContainerNetwork network : response.getNetworkSettings().getNetworks().values()) {
+            if(_networkId.equals(network.getNetworkID())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected String getNetworkName() {
+        return networkName;
+    }
+
+    protected static String createNetwork(String name, String cidr) {
+        com.github.dockerjava.api.model.Network.Ipam.Config ipamConfig = new com.github.dockerjava.api.model.Network.Ipam.Config();
+        ipamConfig.withSubnet(cidr);
+
+        com.github.dockerjava.api.model.Network.Ipam ipam = new com.github.dockerjava.api.model.Network.Ipam();
+        ipam.withConfig(ipamConfig);
+
+        CreateNetworkResponse response = _client.createNetworkCmd()
+                .withName(name)
+                .withIpam(ipam)
+                .exec();
+
+        return response.getId();
+    }
+
+    protected static void deleteNetwork(String id){
+        _client.removeNetworkCmd(id).exec();
     }
 }

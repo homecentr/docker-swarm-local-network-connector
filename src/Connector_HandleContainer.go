@@ -9,7 +9,7 @@ import (
 )
 
 func (c *Connector) handleContainer(ctx context.Context, containerId string) error {
-	logrus.Debugf("Handling container %s", containerId)
+	logrus.Debugf("Checking container %s", containerId)
 
 	json, err := c.cli.ContainerInspect(ctx, containerId)
 

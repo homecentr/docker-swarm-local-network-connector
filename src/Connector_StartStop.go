@@ -8,19 +8,15 @@ import (
 
 func (c *Connector) Start() {
 	ctx := context.Background()
-	logrus.Infof("Stage 8")
 	eventsContext, cancel := context.WithCancel(ctx)
 
-	logrus.Infof("Stage 9")
 	c.eventsContextCancel = &cancel
 
-	logrus.Infof("Stage 10 %s", eventsContext)
+	logrus.Infof("Subscribing to container create events...")
 	go c.listenToContainerEvents(eventsContext)
 
-	logrus.Infof("Stage 11")
+	logrus.Infof("Verifying existing containers are connected...")
 	c.verifyExistingContainersConnected(context.Background())
-
-	logrus.Infof("Stage 12")
 }
 
 func (c *Connector) Stop() {
