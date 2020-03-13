@@ -1,8 +1,10 @@
 package main
 
 import (
-	"bufio"
+	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/sirupsen/logrus"
 
@@ -14,20 +16,22 @@ func main() {
 	logrus.SetLevel(logrus.DebugLevel)
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+
 	if err != nil {
-		logrus.Panic(err)
-		panic(err)
+		logrus.Fatalf("Initialization of the Docker client has failed. Have you mounted the docker socket/set the environment variables?")
+		os.Exit(1)
 	}
 
 	connector := NewConnector(cli)
+
+	sigs := make(chan os.Signal, 1)
+
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
 	connector.Start()
+	fmt.Println("Started, waiting for SIGTERM signal...")
 
-	reader := bufio.NewReader(os.Stdin)
-	_, err = reader.ReadString('\n')
-
-	if err != nil {
-		panic(err)
-	}
-
+	sig := <-sigs
+	fmt.Printf("Signal received: %s, stopping... \n", sig)
 	connector.Stop()
 }
