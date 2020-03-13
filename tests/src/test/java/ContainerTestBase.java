@@ -9,8 +9,6 @@ import org.testcontainers.containers.GenericContainer;
 
 import java.util.concurrent.TimeoutException;
 
-import static org.junit.Assert.fail;
-
 public abstract class ContainerTestBase {
     private static final String networkName = "target-network";
 
@@ -30,8 +28,7 @@ public abstract class ContainerTestBase {
     }
 
     protected String getConnectorImageTag() {
-        return "homecentr/swarm-local-network-connector:local";
-                // System.getProperty("image_tag", "homecentr/swarm-local-network-connector:local");
+        return System.getProperty("image_tag");
     }
 
     protected void waitUntilContainerConnectedToNetwork(GenericContainer container, Integer timeout) throws InterruptedException, TimeoutException {
