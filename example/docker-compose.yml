@@ -1,0 +1,6 @@
+version: "3.7"
+services:
+  nginx:
+    image: nginx
+    labels:
+      io.homecentr.local-networks: "[{ \"Network\": \"macvlan\", \"Config\": { \"IPAMConfig\": { \"IPV4Address\": \"192.168.2.199\" } } }]"  

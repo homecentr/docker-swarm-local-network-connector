@@ -1,36 +1,94 @@
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.command.CreateNetworkResponse;
+import com.github.dockerjava.api.command.InspectContainerResponse;
+import com.github.dockerjava.api.model.ContainerNetwork;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.containers.wait.strategy.Wait;
+
+import java.util.concurrent.TimeoutException;
 
 public abstract class ContainerTestBase {
-    private static final Logger logger = LoggerFactory.getLogger(ContainerTestBase.class);
+    private static final String networkName = "target-network";
 
-    private static GenericContainer _container;
+    private static String _networkId;
+    private static DockerClient _client;
 
     @BeforeClass
     public static void setUp() {
-        String dockerImageTag = System.getProperty("image_tag", "homecentr/$$IMAGE_NAME$$");
+        _client =  DockerClientFactory.lazyClient();
 
-        logger.info("Tested Docker image tag: {}", dockerImageTag);
-
-        _container = new GenericContainer<>(dockerImageTag)
-                .waitingFor(Wait.forHealthcheck());
-
-        _container.start();
-        _container.followOutput(new Slf4jLogConsumer(logger));
+        _networkId = createNetwork(networkName, "192.168.99.0/24");
     }
 
     @AfterClass
     public static void cleanUp() {
-        _container.stop();
-        _container.close();
+        deleteNetwork(_networkId);
     }
 
-    protected GenericContainer getContainer() {
-        return _container;
+    protected String getConnectorImageTag() {
+        return System.getProperty("image_tag");
+    }
+
+    protected void waitUntilContainerConnectedToNetwork(GenericContainer container, Integer timeout) throws InterruptedException, TimeoutException {
+        long startTime = System.currentTimeMillis();
+
+        while (!isConnectedToNetwork(container)) {
+            long remaining = System.currentTimeMillis() - startTime - timeout;
+
+            if (remaining < 0) {
+                throw new TimeoutException("The container did not get connected to the network within the timeout.");
+            }
+
+            Thread.sleep(500);
+        }
+    }
+
+    protected String getContainerIpAddress(GenericContainer container) throws Exception {
+        InspectContainerResponse response = _client.inspectContainerCmd(container.getContainerId()).exec();
+
+        for (ContainerNetwork network : response.getNetworkSettings().getNetworks().values()) {
+            if(_networkId.equals(network.getNetworkID())) {
+                return network.getIpAddress();
+            }
+        }
+
+        throw new Exception("The container is not connected to the network " + _networkId);
+    }
+
+    private boolean isConnectedToNetwork(GenericContainer container) {
+        InspectContainerResponse response = _client.inspectContainerCmd(container.getContainerId()).exec();
+
+        for (ContainerNetwork network : response.getNetworkSettings().getNetworks().values()) {
+            if(_networkId.equals(network.getNetworkID())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected String getNetworkName() {
+        return networkName;
+    }
+
+    protected static String createNetwork(String name, String cidr) {
+        com.github.dockerjava.api.model.Network.Ipam.Config ipamConfig = new com.github.dockerjava.api.model.Network.Ipam.Config();
+        ipamConfig.withSubnet(cidr);
+
+        com.github.dockerjava.api.model.Network.Ipam ipam = new com.github.dockerjava.api.model.Network.Ipam();
+        ipam.withConfig(ipamConfig);
+
+        CreateNetworkResponse response = _client.createNetworkCmd()
+                .withName(name)
+                .withIpam(ipam)
+                .exec();
+
+        return response.getId();
+    }
+
+    protected static void deleteNetwork(String id){
+        _client.removeNetworkCmd(id).exec();
     }
 }
