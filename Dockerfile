@@ -13,7 +13,7 @@ FROM homecentr/base:1.1.0 as base
 
 LABEL maintainer="Lukas Holota <me@lholota.com>"
 
-FROM alpine:3.11.5
+FROM alpine:3.11.6
 
 # Install packages required by base
 RUN apk add --no-cache \
