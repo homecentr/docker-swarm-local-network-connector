@@ -3,7 +3,6 @@
 [![](https://badgen.net/docker/size/homecentr/swarm-local-network-connector)](https://hub.docker.com/repository/docker/homecentr/swarm-local-network-connector)
 
 ![CI/CD on master](https://github.com/homecentr/docker-swarm-local-network-connector/workflows/CI/CD%20on%20master/badge.svg)
-![Regular Docker image vulnerability scan](https://github.com/homecentr/docker-swarm-local-network-connector/workflows/Regular%20Docker%20image%20vulnerability%20scan/badge.svg)
 
 # HomeCentr - swarm-local-network-connector
 Connector process which monitors for newly created containers and connectes them to the network specified in the label. This is a workaround to solve the problem when Docker Swarm does not pass explicit IP address when connecting container to a macvlan network or other local scoped network drivers.
