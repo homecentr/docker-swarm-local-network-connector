@@ -1,8 +1,8 @@
-FROM golang:1.16.0-alpine as build
+FROM golang:1.16.5-alpine3.14 as build
 
 ENV GO111MODULE=auto
 
-RUN apk add --no-cache git=2.30.1-r0
+RUN apk add --no-cache git=2.32.0-r0
 
 COPY ./src /go/src/github.com/homecentr/docker-swarm-local-network-connector
 
