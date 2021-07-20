@@ -11,7 +11,7 @@ WORKDIR /go/src/github.com/homecentr/docker-swarm-local-network-connector
 RUN go get ./... && \
     go build
 
-FROM homecentr/base:3.0.0-alpine
+FROM homecentr/base:3.1.0-alpine
 
 # Copy S6 overlay
 COPY --from=build /go/src/github.com/homecentr/docker-swarm-local-network-connector/docker-swarm-local-network-connector /swarm-local-network-connector
