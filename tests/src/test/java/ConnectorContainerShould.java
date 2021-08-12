@@ -1,4 +1,8 @@
-import PullPolicies.NeverPullImagePolicy;
+import helpers.DockerImageTagResolver;
+import io.homecentr.testcontainers.containers.GenericContainerEx;
+import io.homecentr.testcontainers.images.NeverPullImagePolicy;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -6,109 +10,94 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 
+import java.time.Duration;
 import java.util.concurrent.TimeoutException;
 
+import static io.homecentr.testcontainers.WaitLoop.waitFor;
 import static org.junit.Assert.assertEquals;
 
 public class ConnectorContainerShould extends ContainerTestBase {
 
     private static final Logger logger = LoggerFactory.getLogger(ContainerTestBase.class);
 
-    @Test
-    public void connectContainersCreatedBeforeStartOfConnector() throws InterruptedException, TimeoutException {
+    private GenericContainer _connectorContainer;
+    private GenericContainer _targetContainer;
 
-        GenericContainer targetContainer = new GenericContainer<>("nginx")
-                .withLabel("io.homecentr.local-networks", "[{ \"Network\": \""+ getNetworkName() +"\" }]");
+    @Before
+    public void before() {
+        _connectorContainer = new GenericContainerEx<>(new DockerImageTagResolver())
+                .withFileSystemBind("//var/run/docker.sock", "/var/run/docker.sock")
+                .withImagePullPolicy(new NeverPullImagePolicy())
+                .withEnv("LOG_LEVEL", "debug")
+                .withEnv("PUID", "0")
+                .withEnv("PGID", "0")
+                .waitingFor(Wait.forLogMessage(".*Started, waiting for signal.*", 1));
+    }
 
-        GenericContainer connectorContainer = createConnectorContainer();
+    @After
+    public void after() {
+        _connectorContainer.close();
 
-        try {
-            targetContainer.start();
-
-            connectorContainer.start();
-            connectorContainer.followOutput(new Slf4jLogConsumer(logger));
-
-            waitUntilContainerConnectedToNetwork(targetContainer, 5000);
-        }
-        finally {
-            targetContainer.close();
-            connectorContainer.close();
+        if(_targetContainer != null) {
+            _targetContainer.close();
         }
     }
 
     @Test
-    public void connectContainerCreatedAfterStartOfConnector() throws InterruptedException, TimeoutException {
-        GenericContainer targetContainer = new GenericContainer<>("nginx")
+    public void connectContainersCreatedBeforeStartOfConnector() throws Exception {
+        _targetContainer = new GenericContainer<>("nginx")
                 .withLabel("io.homecentr.local-networks", "[{ \"Network\": \""+ getNetworkName() +"\" }]");
 
-        GenericContainer connectorContainer = createConnectorContainer();
+        _targetContainer.start();
 
-        try {
-            connectorContainer.start();
-            targetContainer.start();
+        _connectorContainer.start();
+        _connectorContainer.followOutput(new Slf4jLogConsumer(logger));
 
-            connectorContainer.followOutput(new Slf4jLogConsumer(logger));
+        waitFor(Duration.ofSeconds(5), () -> isConnectedToNetwork(_targetContainer));
+    }
 
-            waitUntilContainerConnectedToNetwork(targetContainer, 5000);
-        }
-        finally {
-            targetContainer.close();
-            connectorContainer.close();
-        }
+    @Test
+    public void connectContainerCreatedAfterStartOfConnector() throws Exception {
+        _targetContainer = new GenericContainer<>("nginx")
+                .withLabel("io.homecentr.local-networks", "[{ \"Network\": \""+ getNetworkName() +"\" }]");
+
+        _connectorContainer.start();
+        _connectorContainer.followOutput(new Slf4jLogConsumer(logger));
+
+        _targetContainer.start();
+
+        waitFor(Duration.ofSeconds(5), () -> isConnectedToNetwork(_targetContainer));
     }
 
     @Test
     public void connectContainerWithExplicitConfig() throws Exception {
-        GenericContainer targetContainer = new GenericContainer<>("nginx")
+        _targetContainer = new GenericContainer<>("nginx")
                 .withLabel("io.homecentr.local-networks", "[{ \"Network\": \""+ getNetworkName() +"\", \"Config\": { \"IPAMConfig\": { \"IPV4Address\": \"192.168.99.100\" } } }]");
 
-        GenericContainer connectorContainer = createConnectorContainer();
+        _connectorContainer.start();
+        _connectorContainer.followOutput(new Slf4jLogConsumer(logger));
 
-        try {
-            connectorContainer.start();
-            targetContainer.start();
+        _targetContainer.start();
 
-            connectorContainer.followOutput(new Slf4jLogConsumer(logger));
+        waitFor(Duration.ofSeconds(5), () -> isConnectedToNetwork(_targetContainer));
 
-            waitUntilContainerConnectedToNetwork(targetContainer, 5000);
-
-            assertEquals("192.168.99.100", getContainerIpAddress(targetContainer));
-        }
-        finally {
-            targetContainer.close();
-            connectorContainer.close();
-        }
+        assertEquals("192.168.99.100", getContainerIpAddress(_targetContainer));
     }
 
     @Test
     public void ignoreContainerWithInvalidLabel() throws Exception {
-        GenericContainer targetContainer = new GenericContainer<>("nginx")
+        _targetContainer = new GenericContainer<>("nginx")
                 .withLabel("io.homecentr.local-networks", "[{ \"Network\": \""+ getNetworkName() +"\" }]");
 
-        GenericContainer connectorContainer = createConnectorContainer();
+        _connectorContainer.start();
+        _connectorContainer.followOutput(new Slf4jLogConsumer(logger));
+
+        _targetContainer.start();
 
         try {
-            connectorContainer.start();
-            targetContainer.start();
-
-            connectorContainer.followOutput(new Slf4jLogConsumer(logger));
-
-            try {
-                waitUntilContainerConnectedToNetwork(targetContainer, 5000);
-            }
-            catch (TimeoutException ex) { }
+            // Wait to make sure the container is not connected to the network
+            waitFor(Duration.ofSeconds(5), () -> isConnectedToNetwork(_targetContainer));
         }
-        finally {
-            targetContainer.close();
-            connectorContainer.close();
-        }
-    }
-
-    private GenericContainer createConnectorContainer() {
-        return new GenericContainer<>(getConnectorImageTag())
-                .withFileSystemBind("//var/run/docker.sock", "/var/run/docker.sock")
-                .withImagePullPolicy(new NeverPullImagePolicy())
-                .withEnv("LOG_LEVEL", "debug")
-                .waitingFor(Wait.forLogMessage(".*Started, waiting for signal.*", 1));
+        catch (TimeoutException ex) { }
     }
 }
