@@ -7,8 +7,6 @@ import org.junit.BeforeClass;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
 
-import java.util.concurrent.TimeoutException;
-
 public abstract class ContainerTestBase {
     private static final String networkName = "target-network";
 
@@ -27,24 +25,6 @@ public abstract class ContainerTestBase {
         deleteNetwork(_networkId);
     }
 
-    protected String getConnectorImageTag() {
-        return System.getProperty("image_tag");
-    }
-
-    protected void waitUntilContainerConnectedToNetwork(GenericContainer container, Integer timeout) throws InterruptedException, TimeoutException {
-        long startTime = System.currentTimeMillis();
-
-        while (!isConnectedToNetwork(container)) {
-            long remaining = System.currentTimeMillis() - startTime - timeout;
-
-            if (remaining < 0) {
-                throw new TimeoutException("The container did not get connected to the network within the timeout.");
-            }
-
-            Thread.sleep(500);
-        }
-    }
-
     protected String getContainerIpAddress(GenericContainer container) throws Exception {
         InspectContainerResponse response = _client.inspectContainerCmd(container.getContainerId()).exec();
 
@@ -57,7 +37,7 @@ public abstract class ContainerTestBase {
         throw new Exception("The container is not connected to the network " + _networkId);
     }
 
-    private boolean isConnectedToNetwork(GenericContainer container) {
+    protected boolean isConnectedToNetwork(GenericContainer container) {
         InspectContainerResponse response = _client.inspectContainerCmd(container.getContainerId()).exec();
 
         for (ContainerNetwork network : response.getNetworkSettings().getNetworks().values()) {
