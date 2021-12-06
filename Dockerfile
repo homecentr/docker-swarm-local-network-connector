@@ -1,4 +1,4 @@
-FROM golang:1.17.0-alpine3.14 as build
+FROM golang:1.17.4-alpine3.14 as build
 
 ENV GO111MODULE=auto
 
